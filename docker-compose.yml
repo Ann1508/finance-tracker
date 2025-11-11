@@ -1,8 +1,24 @@
 version: '3.8'
 services:
   frontend:
-    build: .
+    build: ./client   # путь к папке с фронтендом
     image: cpp-progect-frontend:latest
     ports:
       - "8080:80"
     restart: unless-stopped
+    depends_on:
+      - backend   # убедимся, что backend запускается раньше
+    environment:
+      - REACT_APP_API_URL=http://localhost:5000   # адрес API сервера
+
+  backend:
+    build: ./server   # путь к папке с backend
+    image: cpp-progect-backend:latest
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
