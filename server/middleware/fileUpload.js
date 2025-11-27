@@ -33,13 +33,10 @@ const storage = multer.diskStorage({
   },
   filename: function (req, file, cb) {
     // Принудительно декодируем имя в UTF-8
-    console.log("имя файла", file.originalname)
     let originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
-    console.log("____________________________________________________", originalName);
     const ext = path.extname(originalName);
     const base = path.basename(originalName, ext);
     const safeName = transliterate(base).replace(/[^a-zA-Z0-9_-]/g, '_');
-
     cb(null, Date.now() + '-' + originalName);
   }
 });
