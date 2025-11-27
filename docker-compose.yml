@@ -1,24 +1,39 @@
 version: '3.8'
+
 services:
-  frontend:
-    build: ./client   # путь к папке с фронтендом
-    image: cpp-progect-frontend:latest
+  client:
+    build:
+      context: ./client
     ports:
       - "8080:80"
-    restart: unless-stopped
     depends_on:
-      - backend   # убедимся, что backend запускается раньше
-    environment:
-      - REACT_APP_API_URL=http://localhost:5000   # адрес API сервера
+      - server
+    networks:
+      - app-network
 
-  backend:
-    build: ./server   # путь к папке с backend
-    image: cpp-progect-backend:latest
+  server:
+    build:
+      context: ./server
     ports:
-      - "5000:5000"
-    volumes:
-      - ./server:/app
-      - /app/node_modules
-    restart: unless-stopped
+      - "4000:4000"
+    depends_on:
+      - mongo
     environment:
-      - NODE_ENV=development
+      - MONGO_URI=mongodb://mongo:27017/cpp_project_db  # Указываем строку подключения к MongoDB
+    networks:
+      - app-network
+
+  mongo:
+    image: mongo:latest
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mongo-data: {}

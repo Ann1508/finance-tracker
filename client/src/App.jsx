@@ -1,49 +1,81 @@
-import React, { useState, useEffect } from 'react';
+// App.js
+import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 import Nav from './components/Nav';
 import Home from './pages/Home';
 import Projects from './pages/Projects';
 import Profile from './pages/Profile';
+import Register from './pages/Register';
+import Login from './pages/Login';
 import ProjectPage from './pages/ProjectPage';
 import CreateProjectPage from './pages/CreateProjectPage';
+import UserManagement from './pages/UserManagement';
+import {AuthProvider, useAuth} from './hooks/useAuth';
+import ProtectedRoute from './components/ProtectedRoute';
 
-// import { ProjectsProvider } from './context/ProjectsContext'; // Старый Context API закомментирован
-import axios from 'axios';
+function AppContent() {
+  const { user, loading } = useAuth();
 
-export default function App() {
-  const [projects, setProjects] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Подключение к серверу и получение проектов
-    axios.get('http://localhost:5000/api/projects')
-      .then(res => setProjects(res.data))
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) return <div>Загрузка проектов...</div>;
+  if (loading) {
+    return (
+        <div className="min-h-screen bg-purple-100 flex items-center justify-center">
+          <div className="text-purple-600 text-lg">Загрузка...</div>
+        </div>
+    );
+  }
 
   return (
-    // <ProjectsProvider> {/* Старый Context API закомментирован */} 
-    <BrowserRouter>
       <div className="min-h-screen bg-purple-100 text-purple-900">
         <Nav />
-        <main className="max-w-4xl mx-auto p-6">
+        <main className="max-w-7xl mx-auto p-6">
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
 
-            {/* Передаем projects и setProjects через props */}
-            <Route path="/projects" element={<Projects projects={projects} setProjects={setProjects} />} />
-            <Route path="/projects/new" element={<CreateProjectPage projects={projects} setProjects={setProjects} />} />
-            <Route path="/projects/:id" element={<ProjectPage projects={projects} setProjects={setProjects} />} />
+            {/* Защищенные маршруты */}
+            <Route path="/profile" element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            } />
 
-            <Route path="/profile" element={<Profile />} />
+            <Route path="/projects" element={
+              <ProtectedRoute>
+                <Projects />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/projects/new" element={
+              <ProtectedRoute requireAdmin>
+                <CreateProjectPage />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/projects/:id" element={
+              <ProtectedRoute>
+                <ProjectPage />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/admin/users" element={
+              <ProtectedRoute requireAdmin>
+                <UserManagement />
+              </ProtectedRoute>
+            } />
+
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
       </div>
-    </BrowserRouter>
-    // </ProjectsProvider>
+  );
+}
+
+export default function App() {
+  return (
+      <BrowserRouter>
+        <AppContent />
+      </BrowserRouter>
   );
 }
