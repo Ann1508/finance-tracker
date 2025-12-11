@@ -1,65 +1,384 @@
-import React, { useEffect, useState } from 'react';
+// client/src/pages/Profile.jsx
+import React, { useState } from 'react';
 import { auth } from '../Api';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 
 export default function Profile() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { user, updateUser, logout } = useAuth();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('profile'); // profile, password, settings
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const fetchUser = async () => {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        navigate('/login');
-        return;
+  // Форма профиля
+  const [profileData, setProfileData] = useState({
+    name: user?.name || '',
+    email: user?.email || '',
+    bio: user?.bio || ''
+  });
+
+  // Форма смены пароля
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+
+  // Форма настроек
+  const [settingsData, setSettingsData] = useState({
+    currency: user?.currency || 'USD',
+    monthlyBudget: user?.monthlyBudget || 0
+  });
+
+  const currencies = [
+    { code: 'USD', symbol: '$', name: 'Доллар США' },
+    { code: 'EUR', symbol: '€', name: 'Евро' },
+    { code: 'RUB', symbol: '₽', name: 'Российский рубль' },
+    { code: 'PLN', symbol: 'zł', name: 'Польский злотый' },
+    { code: 'GBP', symbol: '£', name: 'Фунт стерлингов' },
+    { code: 'JPY', symbol: '¥', name: 'Японская иена' },
+    { code: 'CNY', symbol: '¥', name: 'Китайский юань' }
+  ];
+
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const updated = await auth.updateProfile(profileData);
+      updateUser(updated);
+      alert('Профиль успешно обновлен');
+      
+      if (profileData.email !== user.email) {
+        alert('На новый email отправлено письмо для подтверждения');
       }
-
-      try {
-        const me = await auth.getMe(token); // передаем токен для запроса
-        setUser(me);
-      } catch (err) {
-        console.error('Ошибка при загрузке профиля', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUser();
-  }, [navigate]);
-
-  const handleLogout = () => {
-    // Удаляем токен из localStorage
-    localStorage.removeItem('token');
-    navigate('/login');
-    setTimeout(() => window.location.reload(), 50);
+    } catch (err) {
+      console.error('Ошибка обновления профиля:', err);
+      alert(err.error || 'Не удалось обновить профиль');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (loading) return <p>Загрузка...</p>;
-  if (!user) return (
-    <div>
-      <p>Пользователь не найден. Пожалуйста, войдите.</p>
-      <button className="mt-2 px-3 py-2 bg-purple-600 text-white rounded" onClick={() => navigate('/login')}>
-        Войти
-      </button>
-    </div>
-  );
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      alert('Новые пароли не совпадают');
+      return;
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      alert('Пароль должен содержать минимум 6 символов');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await auth.changePassword(
+        passwordData.currentPassword,
+        passwordData.newPassword
+      );
+      
+      alert('Пароль успешно изменен');
+      setPasswordData({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      });
+    } catch (err) {
+      console.error('Ошибка смены пароля:', err);
+      alert(err.error || 'Не удалось изменить пароль');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateSettings = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const updated = await auth.updateProfile(settingsData);
+      updateUser(updated);
+      alert('Настройки успешно обновлены');
+    } catch (err) {
+      console.error('Ошибка обновления настроек:', err);
+      alert(err.error || 'Не удалось обновить настройки');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const handleResendVerification = async () => {
+    try {
+      await auth.resendVerification();
+      alert('Письмо отправлено на ваш email');
+    } catch (err) {
+      console.error('Ошибка отправки письма:', err);
+      alert(err.error || 'Не удалось отправить письмо');
+    }
+  };
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-3">Профиль пользователя</h1>
-      <div className="bg-white p-4 rounded shadow-sm border">
-        <div className="mb-2"><strong>Имя:</strong> {user.login}</div>
-        <div><strong>Роль:</strong> {user.role}</div>
+    <div className="max-w-4xl mx-auto">
+      <h1 className="text-3xl font-bold text-gray-900 mb-6">Профиль</h1>
+
+      {/* Карточка пользователя */}
+      <div className="bg-white rounded-xl shadow-sm border p-6 mb-6">
+        <div className="flex items-center gap-6">
+          <div className="w-20 h-20 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-full flex items-center justify-center text-white text-3xl font-bold">
+            {user?.name?.charAt(0).toUpperCase() || '?'}
+          </div>
+          <div className="flex-1">
+            <h2 className="text-2xl font-bold text-gray-900">{user?.name}</h2>
+            <p className="text-gray-600">@{user?.login}</p>
+            <div className="flex items-center gap-2 mt-2">
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                user?.role === 'admin' 
+                  ? 'bg-red-100 text-red-800' 
+                  : 'bg-blue-100 text-blue-800'
+              }`}>
+                {user?.role === 'admin' ? '👑 Администратор' : '👤 Пользователь'}
+              </span>
+              {user?.email && (
+                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  user?.emailVerified
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-yellow-100 text-yellow-800'
+                }`}>
+                  {user?.emailVerified ? '✓ Email подтвержден' : '⚠ Email не подтвержден'}
+                </span>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="bg-red-100 hover:bg-red-200 text-red-700 px-4 py-2 rounded-lg font-medium transition-colors"
+          >
+            Выйти
+          </button>
+        </div>
+
+        {user?.email && !user?.emailVerified && (
+          <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-sm text-yellow-800 mb-2">
+              Ваш email не подтвержден. Проверьте почту или запросите новое письмо.
+            </p>
+            <button
+              onClick={handleResendVerification}
+              className="text-sm text-yellow-700 hover:text-yellow-900 font-medium underline"
+            >
+              Отправить письмо повторно
+            </button>
+          </div>
+        )}
       </div>
-      
-      {/* Кнопка выхода */}
-      <button
-        className="mt-4 px-3 py-2 bg-red-600 text-white rounded"
-        onClick={handleLogout}
-      >
-        Выйти
-      </button>
+
+      {/* Табы */}
+      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+        <div className="flex border-b">
+          <button
+            onClick={() => setActiveTab('profile')}
+            className={`flex-1 px-6 py-4 font-medium transition-colors ${
+              activeTab === 'profile'
+                ? 'bg-purple-50 text-purple-700 border-b-2 border-purple-600'
+                : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            👤 Профиль
+          </button>
+          <button
+            onClick={() => setActiveTab('password')}
+            className={`flex-1 px-6 py-4 font-medium transition-colors ${
+              activeTab === 'password'
+                ? 'bg-purple-50 text-purple-700 border-b-2 border-purple-600'
+                : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            🔒 Пароль
+          </button>
+          <button
+            onClick={() => setActiveTab('settings')}
+            className={`flex-1 px-6 py-4 font-medium transition-colors ${
+              activeTab === 'settings'
+                ? 'bg-purple-50 text-purple-700 border-b-2 border-purple-600'
+                : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            ⚙️ Настройки
+          </button>
+        </div>
+
+        <div className="p-6">
+          {/* Вкладка профиля */}
+          {activeTab === 'profile' && (
+            <form onSubmit={handleUpdateProfile} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Имя
+                </label>
+                <input
+                  type="text"
+                  value={profileData.name}
+                  onChange={e => setProfileData({ ...profileData, name: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="Ваше имя"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={profileData.email}
+                  onChange={e => setProfileData({ ...profileData, email: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="your@email.com"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  При изменении email потребуется подтверждение
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  О себе
+                </label>
+                <textarea
+                  value={profileData.bio}
+                  onChange={e => setProfileData({ ...profileData, bio: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                  rows="4"
+                  placeholder="Расскажите немного о себе..."
+                  maxLength={500}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {profileData.bio.length}/500 символов
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:bg-gray-400"
+              >
+                {loading ? 'Сохранение...' : 'Сохранить изменения'}
+              </button>
+            </form>
+          )}
+
+          {/* Вкладка пароля */}
+          {activeTab === 'password' && (
+            <form onSubmit={handleChangePassword} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Текущий пароль
+                </label>
+                <input
+                  type="password"
+                  value={passwordData.currentPassword}
+                  onChange={e => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="••••••••"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Новый пароль
+                </label>
+                <input
+                  type="password"
+                  value={passwordData.newPassword}
+                  onChange={e => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="••••••••"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Минимум 6 символов
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Подтвердите новый пароль
+                </label>
+                <input
+                  type="password"
+                  value={passwordData.confirmPassword}
+                  onChange={e => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="••••••••"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:bg-gray-400"
+              >
+                {loading ? 'Изменение...' : 'Изменить пароль'}
+              </button>
+            </form>
+          )}
+
+          {/* Вкладка настроек */}
+          {activeTab === 'settings' && (
+            <form onSubmit={handleUpdateSettings} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Валюта
+                </label>
+                <select
+                  value={settingsData.currency}
+                  onChange={e => setSettingsData({ ...settingsData, currency: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  {currencies.map(curr => (
+                    <option key={curr.code} value={curr.code}>
+                      {curr.symbol} {curr.name} ({curr.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Месячный бюджет
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={settingsData.monthlyBudget}
+                  onChange={e => setSettingsData({ ...settingsData, monthlyBudget: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="0.00"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Установите лимит расходов на месяц (опционально)
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:bg-gray-400"
+              >
+                {loading ? 'Сохранение...' : 'Сохранить настройки'}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
