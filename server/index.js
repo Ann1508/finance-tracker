@@ -19,6 +19,10 @@ app.use('/api/auth', jsonParser, require('./routes/auth'));
 app.use('/api/users', jsonParser, require('./routes/users'));
 app.use('/api/categories', jsonParser, require('./routes/categories'));
 app.use('/api/transactions', require('./routes/transactions')); // Использует multer внутри
+app.use('/api/goals', jsonParser, require('./routes/goals'));
+app.use('/api/recurring-payments', jsonParser, require('./routes/recurringPayments'));
+app.use('/api/budgets', jsonParser, require('./routes/budgets')); // Добавил jsonParser
+app.use('/api/envelopes', jsonParser, require('./routes/envelopes'));
 
 // Статические файлы для чеков
 app.use('/uploads', express.static('./uploads'));

@@ -8,11 +8,16 @@ const upload = require('../middleware/fileUpload');
 const path = require('path');
 const fs = require('fs');
 
+// ✅ ДОБАВЛЯЕМ JSON PARSER В НАЧАЛО
+router.use(express.json());
+
 // Создать транзакцию
 router.post('/', auth, upload.single('receipt'), async (req, res) => {
   try {
-    const { title, amount, type, category, date, description } = req.body;
+    const { title, amount, type, category, date, description, priority, envelopeId } = req.body;
     const receipt = req.file;
+
+    console.log('📨 Получены данные:', { title, amount, type, category, envelopeId });
 
     if (!title || !amount || !type || !category) {
       return res.status(400).json({ error: 'Заполните все обязательные поля' });
@@ -28,6 +33,15 @@ router.post('/', auth, upload.single('receipt'), async (req, res) => {
       return res.status(404).json({ error: 'Категория не найдена' });
     }
 
+    // Преобразуем приоритет в число и валидируем
+    let priorityValue = 3; // дефолт
+    if (priority !== undefined && priority !== null && priority !== '') {
+      const parsedPriority = parseInt(priority);
+      if ([1, 2, 3, 4, 5].includes(parsedPriority)) {
+        priorityValue = parsedPriority;
+      }
+    }
+
     const transaction = new Transaction({
       title,
       amount: parseFloat(amount),
@@ -36,16 +50,19 @@ router.post('/', auth, upload.single('receipt'), async (req, res) => {
       userId: req.user.id,
       date: date || new Date(),
       description: description || '',
+      priority: priorityValue,
+      envelopeId: envelopeId || null,
       receipt: receipt ? `uploads/files/${receipt.filename}` : null
     });
 
     await transaction.save();
     await transaction.populate('category', 'name type color icon');
 
+    console.log('✅ Транзакция создана:', transaction._id);
     res.status(201).json(transaction);
   } catch (err) {
-    console.error('Create transaction error:', err);
-    res.status(500).json({ error: 'Ошибка при создании транзакции' });
+    console.error('❌ Create transaction error:', err);
+    res.status(500).json({ error: 'Ошибка при создании транзакции: ' + err.message });
   }
 });
 
@@ -72,7 +89,7 @@ router.get('/', auth, async (req, res) => {
 
     res.json(transactions);
   } catch (err) {
-    console.error('Get transactions error:', err);
+    console.error('❌ Get transactions error:', err);
     res.status(500).json({ error: 'Ошибка при получении транзакций' });
   }
 });
@@ -145,7 +162,7 @@ router.get('/stats', auth, async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    console.error('Get stats error:', err);
+    console.error('❌ Get stats error:', err);
     res.status(500).json({ error: 'Ошибка при получении статистики' });
   }
 });
@@ -164,7 +181,7 @@ router.get('/:id', auth, async (req, res) => {
 
     res.json(transaction);
   } catch (err) {
-    console.error('Get transaction error:', err);
+    console.error('❌ Get transaction error:', err);
     res.status(500).json({ error: 'Ошибка при получении транзакции' });
   }
 });
@@ -172,7 +189,7 @@ router.get('/:id', auth, async (req, res) => {
 // Обновить транзакцию
 router.put('/:id', auth, upload.single('receipt'), async (req, res) => {
   try {
-    const { title, amount, type, category, date, description, removeReceipt } = req.body;
+    const { title, amount, type, category, date, description, priority, removeReceipt } = req.body;
     const receipt = req.file;
 
     const transaction = await Transaction.findOne({
@@ -203,6 +220,13 @@ router.put('/:id', auth, upload.single('receipt'), async (req, res) => {
     if (category !== undefined) updatedData.category = category;
     if (date !== undefined) updatedData.date = date;
     if (description !== undefined) updatedData.description = description;
+    
+    if (priority !== undefined && priority !== null && priority !== '') {
+      const parsedPriority = parseInt(priority);
+      if ([1, 2, 3, 4, 5].includes(parsedPriority)) {
+        updatedData.priority = parsedPriority;
+      }
+    }
 
     // Обработка файла чека
     if (receipt) {
@@ -230,7 +254,7 @@ router.put('/:id', auth, upload.single('receipt'), async (req, res) => {
 
     res.json(updatedTransaction);
   } catch (err) {
-    console.error('Update transaction error:', err);
+    console.error('❌ Update transaction error:', err);
     res.status(500).json({ error: 'Ошибка при обновлении транзакции' });
   }
 });
@@ -258,7 +282,7 @@ router.delete('/:id', auth, async (req, res) => {
     await Transaction.findByIdAndDelete(req.params.id);
     res.json({ message: 'Транзакция удалена' });
   } catch (err) {
-    console.error('Delete transaction error:', err);
+    console.error('❌ Delete transaction error:', err);
     res.status(500).json({ error: 'Ошибка при удалении транзакции' });
   }
 });

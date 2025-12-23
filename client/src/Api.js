@@ -155,3 +155,89 @@ export const users = {
   }),
   remove: (id) => apiFetch('/api/users/' + id, { method: 'DELETE' }),
 };
+
+
+export const budgets = {
+  list: async (filters = {}) => {
+    const query = new URLSearchParams(filters).toString();
+    const response = await fetch(`${API_BASE}/api/budgets?${query}`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw error;
+    }
+    
+    return response.json();
+  },
+
+  get: async (id) => {
+    const response = await fetch(`${API_BASE}/api/budgets/${id}`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw error;
+    }
+    
+    return response.json();
+  },
+
+  create: async (data) => {
+    const response = await fetch(`${API_BASE}/api/budgets`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify(data)
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw error;
+    }
+    
+    return response.json();
+  },
+
+  update: async (id, data) => {
+    const response = await fetch(`${API_BASE}/api/budgets/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify(data)
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw error;
+    }
+    
+    return response.json();
+  },
+
+  remove: async (id) => {
+    const response = await fetch(`${API_BASE}/api/budgets/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw error;
+    }
+    
+    return response.json();
+  }
+};

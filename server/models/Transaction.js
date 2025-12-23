@@ -41,6 +41,17 @@ const TransactionSchema = new mongoose.Schema({
   receipt: {
     type: String, // путь к файлу чека
     default: null
+  },
+    priority: {
+    type: Number,
+    enum: [1, 2, 3, 4, 5],
+    default: 3,
+    description: '1 = Критически важно (ЖКХ, продукты), 2 = Важно (лекарства, топливо), 3 = Средний приоритет, 4 = Низкий, 5 = Развлечение'
+  },
+  // Флаг: можно ли сэкономить на этой транзакции
+  canReduce: {
+    type: Boolean,
+    default: true
   }
 }, {
   timestamps: true

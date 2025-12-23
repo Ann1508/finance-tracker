@@ -12,8 +12,10 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState({
     type: 'all',
-    period: 'month'
+    period: 'month',
+    category: 'all' 
   });
+  const [selectedMonth, setSelectedMonth] = useState(new Date()); // Выбранный месяц
   const [showAddTransaction, setShowAddTransaction] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState(null);
@@ -26,7 +28,8 @@ export default function Dashboard() {
     type: 'expense',
     category: '',
     date: new Date().toISOString().split('T')[0],
-    description: ''
+    description: '',
+    priority: 3
   });
 
   useEffect(() => {
@@ -63,32 +66,77 @@ export default function Dashboard() {
     }
   };
 
-  const calculateStats = (transactionsList) => {
-    let income = 0;
-    let incomeCount = 0;
-    let expense = 0;
-    let expenseCount = 0;
+    useEffect(() => {
+    if (transactions.length > 0) {
+      const calculatedStats = calculateStats(filteredTransactions);
+      setStats(calculatedStats);
+    }
+  }, [filter.category]);
 
-    transactionsList.forEach(transaction => {
-      const amount = parseFloat(transaction.amount) || 0;
-      
-      if (transaction.type === 'income') {
-        income += amount;
-        incomeCount++;
-      } else if (transaction.type === 'expense') {
-        expense += amount;
-        expenseCount++;
+    // ✅ Обновленная функция calculateStats для учёта фильтра по категории
+    const calculateStats = (transactionsList) => {
+        let income = 0;
+        let incomeCount = 0;
+        let expense = 0;
+        let expenseCount = 0;
+
+        transactionsList.forEach(transaction => {
+        const amount = parseFloat(transaction.amount) || 0;
+        
+        // ✅ ИСКЛЮЧАЕМ переводы между конвертами из статистики
+        const isTransfer = transaction.title?.includes('Перевод между конвертами');
+        if (isTransfer) {
+            return;
+        }
+
+        if (transaction.type === 'income') {
+            income += amount;
+            incomeCount++;
+        } else if (transaction.type === 'expense') {
+            expense += amount;
+            expenseCount++;
+        }
+        });
+
+        return {
+        income: Math.round(income * 100) / 100,
+        incomeCount,
+        expense: Math.round(expense * 100) / 100,
+        expenseCount,
+        balance: Math.round((income - expense) * 100) / 100
+        };
+    };
+
+  // ✅ НОВАЯ функция для получения уникальных категорий из транзакций
+  const getAvailableCategories = () => {
+    const categorySet = new Set();
+    transactions.forEach(transaction => {
+      const catId = transaction.category?._id || transaction.category;
+      if (catId) {
+        categorySet.add(catId);
       }
     });
-
-    return {
-      income: Math.round(income * 100) / 100,
-      incomeCount,
-      expense: Math.round(expense * 100) / 100,
-      expenseCount,
-      balance: Math.round((income - expense) * 100) / 100
-    };
+    return Array.from(categorySet);
   };
+
+// ✅ ОБНОВЛЕННАЯ ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ - получить чистое описание
+const getCleanDescription = (transaction) => {
+  // Если это пополнение конверта или перевод между конвертами с JSON в description
+  if (transaction.title?.includes('Пополнение конверта') || transaction.title?.includes('Перевод между конвертами')) {
+    try {
+      const data = JSON.parse(transaction.description);
+      if (data.originalDescription) {
+        return data.originalDescription;
+      }
+    } catch (e) {
+      // Если парсинг не удался, вернем исходное описание
+    }
+  }
+  
+  // Для всех остальных транзакций вернем описание как есть
+  return transaction.description || '';
+};
+
 
   const getPeriodDates = (period) => {
     const now = new Date();
@@ -138,11 +186,16 @@ export default function Dashboard() {
     try {
       const formData = new FormData();
       formData.append('title', newTransaction.title);
-      formData.append('amount', newTransaction.amount);
+      formData.append('amount', parseFloat(newTransaction.amount));
       formData.append('type', newTransaction.type);
       formData.append('category', newTransaction.category);
       formData.append('date', newTransaction.date);
       formData.append('description', newTransaction.description);
+      
+      // КРИТИЧЕСКИ ВАЖНО: отправляем приоритет как число
+      const priority = parseInt(newTransaction.priority);
+      console.log('Отправляемый приоритет:', priority, 'тип:', typeof priority);
+      formData.append('priority', priority);
       
       if (receiptFile) {
         formData.append('receipt', receiptFile);
@@ -154,24 +207,30 @@ export default function Dashboard() {
         await transactionsApi.create(formData);
       }
       
+      // Очищаем форму
+      resetTransactionForm();
       setShowAddTransaction(false);
       setEditingTransaction(null);
-      setReceiptFile(null);
-      setReceiptPreview(null);
-      setNewTransaction({
-        title: '',
-        amount: '',
-        type: 'expense',
-        category: '',
-        date: new Date().toISOString().split('T')[0],
-        description: ''
-      });
       
       fetchData();
     } catch (err) {
       console.error('Ошибка создания транзакции:', err);
       alert(err.error || 'Не удалось создать транзакцию');
     }
+  };
+
+  const resetTransactionForm = () => {
+    setReceiptFile(null);
+    setReceiptPreview(null);
+    setNewTransaction({
+      title: '',
+      amount: '',
+      type: 'expense',
+      category: '',
+      date: new Date().toISOString().split('T')[0],
+      description: '',
+      priority: 3
+    });
   };
 
   const handleEditTransaction = (transaction) => {
@@ -182,7 +241,8 @@ export default function Dashboard() {
       type: transaction.type,
       category: transaction.category._id || transaction.category,
       date: new Date(transaction.date).toISOString().split('T')[0],
-      description: transaction.description || ''
+      description: transaction.description || '',
+      priority: parseInt(transaction.priority) || 3
     });
     if (transaction.receipt) {
       setReceiptPreview(transaction.receipt);
@@ -246,9 +306,57 @@ export default function Dashboard() {
     setShowReceiptModal(true);
   };
 
-  const filteredTransactions = filter.type === 'all' 
-    ? transactions 
-    : transactions.filter(t => t.type === filter.type);
+    // ✅ ОБНОВЛЕННАЯ фильтрация транзакций
+    const filteredTransactions = (() => {
+    let result = transactions;
+
+    // Фильтр по типу
+    if (filter.type !== 'all') {
+        result = result.filter(t => t.type === filter.type);
+    }
+
+    // ✅ Фильтр по категории
+    if (filter.category !== 'all') {
+        result = result.filter(t => {
+        const catId = t.category?._id || t.category;
+        return catId === filter.category;
+        });
+    }
+
+    return result;
+    })();
+
+  const getPriorityInfo = (priority) => {
+    const info = {
+      1: { label: 'Критически важно', icon: '🔴', color: 'text-red-600' },
+      2: { label: 'Важно', icon: '🟠', color: 'text-orange-600' },
+      3: { label: 'Средний приоритет', icon: '🟡', color: 'text-yellow-600' },
+      4: { label: 'Низкий приоритет', icon: '🔵', color: 'text-blue-600' },
+      5: { label: 'Развлечение', icon: '🟣', color: 'text-purple-600' }
+    };
+    return info[priority] || info[3];
+  };
+
+  const handleTypeChange = (newType) => {
+    setNewTransaction(prev => ({
+      ...prev,
+      type: newType,
+      // Сбрасываем приоритет при изменении типа (если это расход, приоритет = 3, если доход, то не нужен)
+      priority: newType === 'expense' ? 3 : 3
+    }));
+  };
+
+  const openAddTransactionModal = () => {
+    resetTransactionForm();
+    setEditingTransaction(null);
+    setShowAddTransaction(true);
+  };
+
+  const closeAddTransactionModal = () => {
+    setShowAddTransaction(false);
+    setEditingTransaction(null);
+    resetTransactionForm();
+  };
 
   if (loading) {
     return (
@@ -317,94 +425,98 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Фильтры и кнопка добавления */}
-      <div className="flex flex-wrap gap-4 items-center mb-6">
+    {/* Фильтры и кнопка добавления */}
+    <div className="flex flex-wrap gap-4 items-center mb-6">
         <div className="flex gap-2">
-          <button
+        <button
             onClick={() => setFilter({ ...filter, period: 'week' })}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              filter.period === 'week'
+            filter.period === 'week'
                 ? 'bg-purple-600 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
-          >
+        >
             Неделя
-          </button>
-          <button
+        </button>
+        <button
             onClick={() => setFilter({ ...filter, period: 'month' })}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              filter.period === 'month'
+            filter.period === 'month'
                 ? 'bg-purple-600 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
-          >
+        >
             Месяц
-          </button>
-          <button
+        </button>
+        <button
             onClick={() => setFilter({ ...filter, period: 'year' })}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              filter.period === 'year'
+            filter.period === 'year'
                 ? 'bg-purple-600 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
-          >
+        >
             Год
-          </button>
+        </button>
         </div>
 
         <div className="flex gap-2">
-          <button
+        <button
             onClick={() => setFilter({ ...filter, type: 'all' })}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              filter.type === 'all'
+            filter.type === 'all'
                 ? 'bg-purple-600 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
-          >
+        >
             Все
-          </button>
-          <button
+        </button>
+        <button
             onClick={() => setFilter({ ...filter, type: 'income' })}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              filter.type === 'income'
+            filter.type === 'income'
                 ? 'bg-green-600 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
-          >
+        >
             Доходы
-          </button>
-          <button
+        </button>
+        <button
             onClick={() => setFilter({ ...filter, type: 'expense' })}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              filter.type === 'expense'
+            filter.type === 'expense'
                 ? 'bg-red-600 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
-          >
+        >
             Расходы
-          </button>
+        </button>
         </div>
 
-        <button
-          onClick={() => {
-            setEditingTransaction(null);
-            setReceiptFile(null);
-            setReceiptPreview(null);
-            setNewTransaction({
-              title: '',
-              amount: '',
-              type: 'expense',
-              category: '',
-              date: new Date().toISOString().split('T')[0],
-              description: ''
-            });
-            setShowAddTransaction(true);
-          }}
-          className="ml-auto bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+        {/* ✅ НОВЫЙ СЕЛЕКТ ДЛЯ ФИЛЬТРА ПО КАТЕГОРИИ */}
+        <select
+        value={filter.category}
+        onChange={e => setFilter({ ...filter, category: e.target.value })}
+        className="px-4 py-2 rounded-lg font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors border border-gray-300"
         >
-          + Добавить транзакцию
+        <option value="all">Все категории</option>
+        {getAvailableCategories().map(catId => {
+            const category = categories.find(c => c._id === catId);
+            return category ? (
+            <option key={catId} value={catId}>
+                {category.icon} {category.name}
+            </option>
+            ) : null;
+        })}
+        </select>
+
+        <button
+        onClick={openAddTransactionModal}
+        className="ml-auto bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+        >
+        + Добавить транзакцию
         </button>
-      </div>
+    </div>
 
       {/* Список транзакций */}
       <div className="bg-white rounded-xl shadow-sm border p-6">
@@ -416,59 +528,67 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="space-y-3">
-            {filteredTransactions.map(transaction => (
-              <div key={transaction._id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
-                <div className="flex items-center gap-4 flex-1">
-                  <div
-                    className="w-12 h-12 rounded-full flex items-center justify-center text-xl"
-                    style={{ backgroundColor: transaction.category?.color + '20' }}
-                  >
-                    {transaction.category?.icon}
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-semibold text-gray-900">{transaction.title}</div>
-                    <div className="text-sm text-gray-600">
-                      {transaction.category?.name} • {new Date(transaction.date).toLocaleDateString('ru-RU')}
-                    </div>
-                    {transaction.description && (
-                      <div className="text-xs text-gray-500 mt-1">{transaction.description}</div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 ml-4">
-                  <div className={`text-xl font-bold ${transaction.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
-                    {transaction.type === 'income' ? '+' : '-'}{transaction.amount.toLocaleString('ru-RU', { maximumFractionDigits: 2 })}
-                  </div>
-
-                  {transaction.receipt && (
-                    <button
-                      onClick={() => handleViewReceipt(transaction.receipt)}
-                      title="Просмотреть чек"
-                      className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-sm font-medium transition-colors"
+            {filteredTransactions.map(transaction => {
+              const priority = getPriorityInfo(transaction.priority);
+              return (
+                <div key={transaction._id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center gap-4 flex-1">
+                    <div
+                      className="w-12 h-12 rounded-full flex items-center justify-center text-xl"
+                      style={{ backgroundColor: transaction.category?.color + '20' }}
                     >
-                      📄 Чек
+                      {transaction.category?.icon}
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-semibold text-gray-900">{transaction.title}</div>
+                      <div className="text-sm text-gray-600">
+                        {transaction.category?.name} • {new Date(transaction.date).toLocaleDateString('ru-RU')}
+                      </div>
+                      {getCleanDescription(transaction) && (
+                        <div className="text-xs text-gray-500 mt-1">{getCleanDescription(transaction)}</div>
+                      )}
+                      {transaction.type === 'expense' && (
+                        <div className={`text-xs font-medium mt-1 ${priority.color}`}>
+                          {priority.icon} {priority.label}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 ml-4">
+                    <div className={`text-xl font-bold ${transaction.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
+                      {transaction.type === 'income' ? '+' : '-'}{transaction.amount.toLocaleString('ru-RU', { maximumFractionDigits: 2 })}
+                    </div>
+
+                    {transaction.receipt && (
+                      <button
+                        onClick={() => handleViewReceipt(transaction.receipt)}
+                        title="Просмотреть чек"
+                        className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-sm font-medium transition-colors"
+                      >
+                        📄 Чек
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => handleEditTransaction(transaction)}
+                      title="Редактировать"
+                      className="px-3 py-1 bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      ✏️
                     </button>
-                  )}
 
-                  <button
-                    onClick={() => handleEditTransaction(transaction)}
-                    title="Редактировать"
-                    className="px-3 py-1 bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-lg text-sm font-medium transition-colors"
-                  >
-                    ✏️
-                  </button>
-
-                  <button
-                    onClick={() => handleDeleteTransaction(transaction._id)}
-                    title="Удалить"
-                    className="px-3 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-sm font-medium transition-colors"
-                  >
-                    🗑️
-                  </button>
+                    <button
+                      onClick={() => handleDeleteTransaction(transaction._id)}
+                      title="Удалить"
+                      className="px-3 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -477,7 +597,7 @@ export default function Dashboard() {
       {showAddTransaction && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-          onClick={() => setShowAddTransaction(false)}
+          onClick={closeAddTransactionModal}
         >
           <div
             className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto"
@@ -496,7 +616,7 @@ export default function Dashboard() {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => setNewTransaction({ ...newTransaction, type: 'income' })}
+                      onClick={() => handleTypeChange('income')}
                       className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
                         newTransaction.type === 'income'
                           ? 'bg-green-600 text-white'
@@ -507,7 +627,7 @@ export default function Dashboard() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setNewTransaction({ ...newTransaction, type: 'expense' })}
+                      onClick={() => handleTypeChange('expense')}
                       className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
                         newTransaction.type === 'expense'
                           ? 'bg-red-600 text-white'
@@ -578,6 +698,58 @@ export default function Dashboard() {
                   />
                 </div>
 
+                {/* Приоритет расхода */}
+                {newTransaction.type === 'expense' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      Приоритет расхода
+                    </label>
+                    <div className="grid grid-cols-5 gap-2">
+                      {[
+                        { value: 1, label: 'Критически\nважно', icon: '🔴', color: 'red' },
+                        { value: 2, label: 'Важно', icon: '🟠', color: 'orange' },
+                        { value: 3, label: 'Средний', icon: '🟡', color: 'yellow' },
+                        { value: 4, label: 'Низкий', icon: '🔵', color: 'blue' },
+                        { value: 5, label: 'Развлечение', icon: '🟣', color: 'purple' }
+                      ].map(p => {
+                        const colors = {
+                          red: 'bg-red-200 ring-red-500 border-red-400',
+                          orange: 'bg-orange-200 ring-orange-500 border-orange-400',
+                          yellow: 'bg-yellow-200 ring-yellow-500 border-yellow-400',
+                          blue: 'bg-blue-200 ring-blue-500 border-blue-400',
+                          purple: 'bg-purple-200 ring-purple-500 border-purple-400'
+                        };
+                        
+                        const isSelected = parseInt(newTransaction.priority) === p.value;
+                        
+                        return (
+                          <button
+                            key={p.value}
+                            type="button"
+                            onClick={() => {
+                              console.log('Выбран приоритет:', p.value);
+                              setNewTransaction({ ...newTransaction, priority: p.value });
+                            }}
+                            className={`p-3 rounded-lg text-center transition-all ${
+                              isSelected
+                                ? `${colors[p.color]} ring-2 border-2`
+                                : 'bg-gray-100 border border-gray-300 hover:bg-gray-200'
+                            }`}
+                          >
+                            <div className="text-2xl mb-1">{p.icon}</div>
+                            <div className="text-xs font-medium line-clamp-2 whitespace-pre-line">{p.label}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      🔴 Критически важно: ЖКХ, продукты, лекарства
+                      <br />
+                      🟣 Развлечение: кино, рестораны, хобби
+                    </p>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Описание
@@ -643,12 +815,7 @@ export default function Dashboard() {
                 <div className="flex gap-3 pt-4 border-t">
                   <button
                     type="button"
-                    onClick={() => {
-                      setShowAddTransaction(false);
-                      setEditingTransaction(null);
-                      setReceiptFile(null);
-                      setReceiptPreview(null);
-                    }}
+                    onClick={closeAddTransactionModal}
                     className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
                   >
                     Отмена

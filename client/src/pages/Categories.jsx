@@ -57,47 +57,55 @@ export default function Categories() {
     }
   };
 
-  // Функция для расчета статистики по категориям
-const calculateCategoryStats = (transactions) => {
-  const statsMap = {};
 
-  transactions.forEach(transaction => {
-    // Универсально достаём ID категории
-    let categoryId = null;
+    // ✅ ОБНОВЛЕННАЯ функция для расчета статистики по категориям
+    const calculateCategoryStats = (transactions) => {
+        const statsMap = {};
 
-    if (transaction.categoryId) {
-      categoryId = transaction.categoryId;
-    } else if (transaction.category) {
-      categoryId = typeof transaction.category === "object"
-        ? transaction.category._id
-        : transaction.category;
-    }
+        transactions.forEach(transaction => {
+        // Универсально достаём ID категории
+        let categoryId = null;
 
-    if (!categoryId) return;
+        if (transaction.categoryId) {
+            categoryId = transaction.categoryId;
+        } else if (transaction.category) {
+            categoryId = typeof transaction.category === "object"
+            ? transaction.category._id
+            : transaction.category;
+        }
 
-    if (!statsMap[categoryId]) {
-      statsMap[categoryId] = { 
-        total: 0, 
-        count: 0,
-        income: 0,
-        expense: 0
-      };
-    }
+        if (!categoryId) return;
 
-    const amount = Number(transaction.amount) || 0;
+        // ✅ ИСКЛЮЧАЕМ переводы между конвертами из статистики
+        // Но ВКЛЮЧАЕМ "Пополнение конверта" и "Расход конверта"
+        const isTransfer = transaction.title?.includes('Перевод между конвертами');
+        if (isTransfer) {
+            return; // Пропускаем переводы между конвертами
+        }
 
-    if (transaction.type === "income") {
-      statsMap[categoryId].income += amount;
-    } else {
-      statsMap[categoryId].expense += amount;
-    }
+        if (!statsMap[categoryId]) {
+            statsMap[categoryId] = { 
+            total: 0, 
+            count: 0,
+            income: 0,
+            expense: 0
+            };
+        }
 
-    statsMap[categoryId].total += amount;
-    statsMap[categoryId].count++;
-  });
+        const amount = Number(transaction.amount) || 0;
 
-  return statsMap;
-};
+        if (transaction.type === "income") {
+            statsMap[categoryId].income += amount;
+        } else if (transaction.type === "expense") {
+            statsMap[categoryId].expense += amount;
+        }
+
+        statsMap[categoryId].total += amount;
+        statsMap[categoryId].count++;
+        });
+
+        return statsMap;
+    };
 
 
   const handleSubmit = async (e) => {

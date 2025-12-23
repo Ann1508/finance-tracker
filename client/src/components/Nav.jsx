@@ -39,12 +39,24 @@ export default function Nav() {
 
           {user ? (
             <>
+              <NavLink to="/goals" className={linkClass}>
+                🎯 Цели
+              </NavLink>
+
               <NavLink to="/dashboard" className={linkClass}>
                 📊 Дашборд
               </NavLink>
 
+              <NavLink to="/budgets" className={linkClass}>
+                💳 Бюджеты
+              </NavLink>
+
               <NavLink to="/categories" className={linkClass}>
                 📁 Категории
+              </NavLink>
+
+              <NavLink to="/envelopes" className={linkClass}>
+                💌 Конверты
               </NavLink>
 
               <NavLink to="/profile" className={linkClass}>

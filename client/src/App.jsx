@@ -14,6 +14,10 @@ import ProtectedRoute from './components/ProtectedRoute';
 import VerifyEmail from './pages/VerifyEmail';
 import ForgotPassword from './pages/ForgotPassword'; 
 import ResetPassword from './pages/ResetPassword'; 
+import Goals from './pages/Goals';
+import Budgets from './pages/Budgets';
+import FinancialTip from './components/FinancialTip';
+import Envelopes from './pages/Envelopes';
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -34,6 +38,7 @@ function AppContent() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/envelopes" element={<Envelopes />} />
 
           {/* Защищенные маршруты */}
           <Route path="/dashboard" element={
@@ -45,6 +50,18 @@ function AppContent() {
           <Route path="/categories" element={
             <ProtectedRoute>
               <Categories />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/budgets" element={
+            <ProtectedRoute>
+              <Budgets />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/goals" element={
+            <ProtectedRoute>
+              <Goals />
             </ProtectedRoute>
           } />
 
@@ -61,6 +78,7 @@ function AppContent() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      <FinancialTip />
     </div>
   );
 }
