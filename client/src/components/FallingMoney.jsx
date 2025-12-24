@@ -1,35 +1,34 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 
-const items = [
-  '💰', '🪙', '💵', '💴', '💶'
-];
+const items = ['💰', '🪙', '💵', '💴', '💶'];
 
 export default function FallingMoney() {
+  const elements = useMemo(() => {
+    return Array.from({ length: 25 }).map(() => ({
+      left: Math.random() * 100,
+      delay: Math.random() * 10,
+      duration: 18 + Math.random() * 12,
+      size: 22 + Math.random() * 18,
+      icon: items[Math.floor(Math.random() * items.length)],
+    }));
+  }, []);
+
   return (
     <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
-
-      {Array.from({ length: 25 }).map((_, i) => {
-        const left = Math.random() * 100;
-        const delay = Math.random() * 10;
-        const duration = 15 + Math.random() * 10;
-        const size = 20 + Math.random() * 20;
-        const icon = items[Math.floor(Math.random() * items.length)];
-
-        return (
-          <span
-            key={i}
-            className="falling-money"
-            style={{
-              left: `${left}%`,
-              animationDelay: `${delay}s`,
-              animationDuration: `${duration}s`,
-              fontSize: `${size}px`,
-            }}
-          >
-            {icon}
-          </span>
-        );
-      })}
+      {elements.map((el, i) => (
+        <span
+          key={i}
+          className="falling-money"
+          style={{
+            left: `${el.left}%`,
+            animationDelay: `${el.delay}s`,
+            animationDuration: `${el.duration}s`,
+            fontSize: `${el.size}px`,
+          }}
+        >
+          {el.icon}
+        </span>
+      ))}
     </div>
   );
 }
