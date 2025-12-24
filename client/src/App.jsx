@@ -42,7 +42,7 @@ function AppContent() {
       {/* Уведомления о платежах - показываются только авторизованным пользователям */}
       {user && <PaymentNotifications />}
       
-      <main className="max-w-7xl mx-auto p-6">
+      <main className="ml-64 max-w-7xl mx-auto p-6">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
