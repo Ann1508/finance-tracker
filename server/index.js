@@ -3,6 +3,9 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const mandatoryPaymentsRoutes = require('./routes/mandatoryPayments');
+const { checkAndSendReminders } = require('./middleware/reminders');
+const cron = require('node-cron');
 
 const app = express();
 
@@ -23,6 +26,7 @@ app.use('/api/goals', jsonParser, require('./routes/goals'));
 app.use('/api/recurring-payments', jsonParser, require('./routes/recurringPayments'));
 app.use('/api/budgets', jsonParser, require('./routes/budgets')); // Добавил jsonParser
 app.use('/api/envelopes', jsonParser, require('./routes/envelopes'));
+app.use('/api/mandatory-payments', jsonParser, mandatoryPaymentsRoutes);
 
 // Статические файлы для чеков
 app.use('/uploads', express.static('./uploads'));
@@ -45,6 +49,12 @@ app.get('/api/health', (req, res) => res.json({
   service: 'Finance Tracker API',
   version: '1.0.0'
 }));
+
+// Запуск проверки напоминаний каждый день в 09:00
+cron.schedule('0 9 * * *', () => {
+  console.log('🔔 Проверка напоминаний об обязательных платежах...');
+  checkAndSendReminders();
+});
 
 // --- Запуск сервера ---
 app.listen(PORT, () => {

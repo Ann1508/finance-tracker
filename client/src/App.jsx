@@ -1,4 +1,5 @@
-// client/src/App.jsx
+// client/src/App.jsx - С PAYMENTS CONTEXT
+
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
@@ -10,6 +11,7 @@ import Profile from './pages/Profile';
 import Register from './pages/Register';
 import Login from './pages/Login';
 import { AuthProvider, useAuth } from './hooks/useAuth';
+import { PaymentsProvider } from './context/PaymentsContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import VerifyEmail from './pages/VerifyEmail';
 import ForgotPassword from './pages/ForgotPassword'; 
@@ -18,6 +20,9 @@ import Goals from './pages/Goals';
 import Budgets from './pages/Budgets';
 import FinancialTip from './components/FinancialTip';
 import Envelopes from './pages/Envelopes';
+import PaymentNotifications from './components/PaymentNotifications';
+import { ThemeProvider } from './context/ThemeContext';
+import { LanguageProvider } from './context/LanguageContext';
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -33,6 +38,10 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 text-purple-900">
       <Nav />
+      
+      {/* Уведомления о платежах - показываются только авторизованным пользователям */}
+      {user && <PaymentNotifications />}
+      
       <main className="max-w-7xl mx-auto p-6">
         <Routes>
           <Route path="/" element={<Home />} />
@@ -87,7 +96,13 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppContent />
+        <ThemeProvider>
+          <LanguageProvider>
+            <PaymentsProvider>
+              <AppContent />
+            </PaymentsProvider>
+          </LanguageProvider>
+        </ThemeProvider>
       </AuthProvider>
     </BrowserRouter>
   );

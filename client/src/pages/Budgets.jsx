@@ -1,4 +1,4 @@
-// client/src/pages/Budgets.jsx
+// client/src/pages/Budgets.jsx - ИСПРАВЛЕНО: корректный расчет для разных периодов
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { categories as categoriesApi, transactions as transactionsApi } from '../Api';
@@ -40,12 +40,21 @@ export default function Budgets() {
       const token = localStorage.getItem('token');
       const { startDate, endDate } = getPeriodDates(period);
 
+      const transactionsParams = {
+        limit: 1000
+      };
+
+      if (startDate && endDate) {
+        transactionsParams.startDate = startDate;
+        transactionsParams.endDate = endDate;
+      }
+
       const [budgetsRes, catsRes, transRes] = await Promise.all([
         axios.get(`${API_BASE}/api/budgets`, {
           headers: { Authorization: `Bearer ${token}` }
         }),
         categoriesApi.list(),
-        transactionsApi.list({ startDate, endDate, limit: 1000 })
+        transactionsApi.list(transactionsParams)
       ]);
 
       setBudgets(budgetsRes.data || []);
@@ -58,7 +67,11 @@ export default function Budgets() {
     }
   };
 
+
   const getPeriodDates = (period) => {
+    if (period === 'all') {
+      return { startDate: null, endDate: null };
+    }
     const now = new Date();
     const endDate = new Date();
     let startDate = new Date();
@@ -83,18 +96,39 @@ export default function Budgets() {
     };
   };
 
-// ✅ ОБНОВЛЕННАЯ ФУНКЦИЯ - исключаем переводы между конвертами
+  // ✅ НОВАЯ ФУНКЦИЯ: пересчитывает лимит бюджета в соответствии с отображаемым периодом
+  const getAdjustedBudgetLimit = (budget) => {
+    if (period === 'all') {
+      return budget.limit; // показываем исходный лимит без пересчёта
+    }
+
+    const budgetPeriod = budget.period;
+    const displayPeriod = period;
+
+    const periodMultipliers = {
+      week: 1,
+      month: 4.33,
+      year: 52
+    };
+
+    if (budgetPeriod === displayPeriod) {
+      return budget.limit;
+    }
+
+    const budgetWeeks = periodMultipliers[budgetPeriod];
+    const displayWeeks = periodMultipliers[displayPeriod];
+
+    return (budget.limit / budgetWeeks) * displayWeeks;
+  };
+
+
+  // ✅ Исключаем все операции конвертов
   const getCategorySpending = (categoryId) => {
-    return transactions
+    const filteredTransactions = transactions.filter(t => !t.title?.includes('Перевод между конвертами'));
+    
+    return filteredTransactions
       .filter(t => {
         const catId = typeof t.category === 'object' ? t.category._id : t.category;
-        
-        // ✅ ИСКЛЮЧАЕМ переводы между конвертами
-        const isTransfer = t.title?.includes('Перевод между конвертами');
-        if (isTransfer) {
-          return false;
-        }
-        
         return catId === categoryId && t.type === 'expense';
       })
       .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
@@ -171,83 +205,49 @@ export default function Budgets() {
     }
   };
 
-// ✅ ОТЛАДОЧНАЯ ВЕРСИЯ calculateWhatIf с логированием
-const calculateWhatIf = () => {
-  console.log('=== ОТЛАДКА calculateWhatIf ===');
-  console.log('Всего транзакций:', transactions.length);
-  
-  // Логируем все транзакции
-  transactions.forEach(t => {
-    console.log(`${t.title} | type: ${t.type} | amount: ${t.amount}`);
-  });
+  const calculateWhatIf = () => {
+    const filteredTransactions = transactions.filter(t => !t.title?.includes('Перевод между конвертами'));
 
-  const incomeTransactions = transactions.filter(t => {
-    const isTransfer = t.title?.includes('Перевод между конвертами');
-    const isReplenishment = t.title?.includes('Пополнение конверта');
-    
-    const shouldInclude = t.type === 'income' && !isTransfer && !isReplenishment;
-    
-    if (t.type === 'income') {
-      console.log(`Income: ${t.title} | isTransfer: ${isTransfer} | isReplenishment: ${isReplenishment} | include: ${shouldInclude}`);
-    }
-    
-    return shouldInclude;
-  });
+    const incomeTransactions = filteredTransactions.filter(t => t.type === 'income');
+    const expenseTransactions = filteredTransactions.filter(t => t.type === 'expense');
 
-  const expenseTransactions = transactions.filter(t => {
-    const isTransfer = t.title?.includes('Перевод между конвертами');
-    const isExpenseConverte = t.title?.includes('Расход конверта');
-    
-    const shouldInclude = t.type === 'expense' && !isTransfer && !isExpenseConverte;
-    
-    if (t.type === 'expense') {
-      console.log(`Expense: ${t.title} | isTransfer: ${isTransfer} | isExpenseConverte: ${isExpenseConverte} | include: ${shouldInclude}`);
-    }
-    
-    return shouldInclude;
-  });
-
-  const currentStats = {
-    income: incomeTransactions.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0),
-    expense: expenseTransactions.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0)
-  };
-
-  console.log('Current Income:', currentStats.income);
-  console.log('Current Expense:', currentStats.expense);
-
-  const newIncome = currentStats.income + (currentStats.income * whatIfScenario.incomeChange / 100);
-  const newExpense = currentStats.expense + (currentStats.expense * whatIfScenario.expenseChange / 100);
-  const newBalance = newIncome - newExpense;
-
-  const impactedBudgets = budgets.map(budget => {
-    const categorySpending = getCategorySpending(budget.categoryId._id || budget.categoryId);
-    const newSpending = categorySpending + (categorySpending * whatIfScenario.expenseChange / 100);
-    const percentUsed = (newSpending / budget.limit) * 100;
-
-    return {
-      ...budget,
-      currentSpending: categorySpending,
-      newSpending: Math.round(newSpending * 100) / 100,
-      percentUsed: Math.round(percentUsed),
-      willExceed: newSpending > budget.limit,
-      limit: budget.limit
+    const currentStats = {
+      income: incomeTransactions.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0),
+      expense: expenseTransactions.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0)
     };
-  });
 
-  setWhatIfResult({
-    currentIncome: currentStats.income,
-    currentExpense: currentStats.expense,
-    currentBalance: currentStats.income - currentStats.expense,
-    newIncome: Math.round(newIncome * 100) / 100,
-    newExpense: Math.round(newExpense * 100) / 100,
-    newBalance: Math.round(newBalance * 100) / 100,
-    incomeChange: whatIfScenario.incomeChange,
-    expenseChange: whatIfScenario.expenseChange,
-    impactedBudgets
-  });
+    const newIncome = currentStats.income + (currentStats.income * whatIfScenario.incomeChange / 100);
+    const newExpense = currentStats.expense + (currentStats.expense * whatIfScenario.expenseChange / 100);
+    const newBalance = newIncome - newExpense;
 
-  console.log('=== КОНЕЦ ОТЛАДКИ ===');
-};
+    const impactedBudgets = budgets.map(budget => {
+      const categorySpending = getCategorySpending(budget.categoryId._id || budget.categoryId);
+      const newSpending = categorySpending + (categorySpending * whatIfScenario.expenseChange / 100);
+      const adjustedLimit = getAdjustedBudgetLimit(budget);
+      const percentUsed = (newSpending / adjustedLimit) * 100;
+
+      return {
+        ...budget,
+        currentSpending: categorySpending,
+        newSpending: Math.round(newSpending * 100) / 100,
+        percentUsed: Math.round(percentUsed),
+        willExceed: newSpending > adjustedLimit,
+        limit: adjustedLimit
+      };
+    });
+
+    setWhatIfResult({
+      currentIncome: currentStats.income,
+      currentExpense: currentStats.expense,
+      currentBalance: currentStats.income - currentStats.expense,
+      newIncome: Math.round(newIncome * 100) / 100,
+      newExpense: Math.round(newExpense * 100) / 100,
+      newBalance: Math.round(newBalance * 100) / 100,
+      incomeChange: whatIfScenario.incomeChange,
+      expenseChange: whatIfScenario.expenseChange,
+      impactedBudgets
+    });
+  };
 
   const getExpenseCategories = () => {
     return categories.filter(c => c.type === 'expense');
@@ -259,6 +259,17 @@ const calculateWhatIf = () => {
     if (percentage >= 100) return { label: 'Превышен', color: 'text-red-600', bg: 'bg-red-50', borderColor: 'border-red-200' };
     if (percentage >= threshold) return { label: 'Близко к лимиту', color: 'text-orange-600', bg: 'bg-orange-50', borderColor: 'border-orange-200' };
     return { label: 'В норме', color: 'text-green-600', bg: 'bg-green-50', borderColor: 'border-green-200' };
+  };
+
+  // ✅ НОВАЯ ФУНКЦИЯ: форматирует отображение периода бюджета
+  const formatBudgetPeriod = (budgetPeriod) => {
+    const periodNames = {
+      all: 'Всё время',
+      week: 'Неделю',
+      month: 'Месяц',
+      year: 'Год'
+    };
+    return periodNames[budgetPeriod] || budgetPeriod;
   };
 
   if (loading) {
@@ -305,6 +316,18 @@ const calculateWhatIf = () => {
 
       {/* Фильтр периода */}
       <div className="flex gap-2 mb-6">
+
+      <button
+        onClick={() => setPeriod('all')}
+        className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+          period === 'all'
+            ? 'bg-purple-600 text-white'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+        }`}
+      >
+        Всё время
+      </button>
+
         <button
           onClick={() => setPeriod('week')}
           className={`px-4 py-2 rounded-lg font-medium transition-colors ${
@@ -353,8 +376,9 @@ const calculateWhatIf = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {budgets.map(budget => {
             const spending = getCategorySpending(budget.categoryId._id || budget.categoryId);
-            const percentage = (spending / budget.limit) * 100;
-            const status = getBudgetStatus(spending, budget.limit, budget.alert_threshold);
+            const adjustedLimit = getAdjustedBudgetLimit(budget);
+            const percentage = (spending / adjustedLimit) * 100;
+            const status = getBudgetStatus(spending, adjustedLimit, budget.alert_threshold);
             const category = categories.find(c => c._id === (budget.categoryId._id || budget.categoryId));
 
             return (
@@ -386,7 +410,7 @@ const calculateWhatIf = () => {
                   <div className="flex justify-between text-sm mb-2">
                     <span className="text-gray-600">Потрачено</span>
                     <span className="font-semibold">
-                      {spending.toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₽ / {budget.limit.toLocaleString('ru-RU')} ₽
+                      {spending.toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₽ / {adjustedLimit.toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₽
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
@@ -413,7 +437,14 @@ const calculateWhatIf = () => {
 
                 {/* Информация */}
                 <div className="flex justify-between text-xs text-gray-600 mb-4">
-                  <span>Период: {budget.period === 'week' ? 'Неделя' : budget.period === 'month' ? 'Месяц' : 'Год'}</span>
+                  <span>
+                    Бюджет на: {formatBudgetPeriod(budget.period)}
+                    {budget.period !== period && (
+                      <span className="text-purple-600 ml-1">
+                        (показано за {formatBudgetPeriod(period)})
+                      </span>
+                    )}
+                  </span>
                   <span>Предупреждение при {budget.alert_threshold}%</span>
                 </div>
 
@@ -428,13 +459,13 @@ const calculateWhatIf = () => {
                 {/* Предупреждение */}
                 {percentage >= budget.alert_threshold && percentage < 100 && (
                   <div className="mt-3 p-3 bg-orange-100 border border-orange-300 rounded-lg text-sm text-orange-800">
-                    ⚠️ Вы потратили {percentage.toFixed(0)}% бюджета. Осталось {(budget.limit - spending).toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₽
+                    ⚠️ Вы потратили {percentage.toFixed(0)}% бюджета. Осталось {(adjustedLimit - spending).toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₽
                   </div>
                 )}
 
                 {percentage >= 100 && (
                   <div className="mt-3 p-3 bg-red-100 border border-red-300 rounded-lg text-sm text-red-800">
-                    🚨 Бюджет превышен на {(spending - budget.limit).toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₽
+                    🚨 Бюджет превышен на {(spending - adjustedLimit).toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₽
                   </div>
                 )}
               </div>
@@ -565,6 +596,8 @@ const calculateWhatIf = () => {
           categories={categories}
         />
       </div>
+
+      {/* Модальное окно сценария "Что если" */}
       {showWhatIf && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"

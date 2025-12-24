@@ -21,7 +21,7 @@ export default function Nav() {
         <Clock />
       </div>
 
-      <div className="max-w-7xl mx-auto flex items-center justify-between p-4">
+    <div className="max-w-7xl mx-auto flex items-center justify-between p-4 pr-24">
         {/* Лого */}
         <NavLink
           to="/"
@@ -47,12 +47,12 @@ export default function Nav() {
                 📊 Дашборд
               </NavLink>
 
-              <NavLink to="/budgets" className={linkClass}>
-                💳 Бюджеты
-              </NavLink>
-
               <NavLink to="/categories" className={linkClass}>
                 📁 Категории
+              </NavLink>
+
+              <NavLink to="/budgets" className={linkClass}>
+                💳 Бюджеты
               </NavLink>
 
               <NavLink to="/envelopes" className={linkClass}>

@@ -3,15 +3,18 @@ import React, { useState, useEffect } from 'react';
 import { categories as categoriesApi, transactions as transactionsApi } from '../Api';
 import { useAuth } from '../hooks/useAuth';
 import CategoryCard from '../components/CategoryCard';
+import Analytics from '../components/Analytics';
 
 export default function Categories() {
   const { user } = useAuth();
   const [categories, setCategories] = useState([]);
+  const [transactions, setTransactions] = useState([]);
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all'); // all, income, expense
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
+  const [showAnalytics, setShowAnalytics] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     type: 'expense',
@@ -44,6 +47,7 @@ export default function Categories() {
       ]);
 
       setCategories(catsRes);
+      setTransactions(transRes);
       
       // Вычисляем статистику по категориям на основе транзакций
       const statsMap = calculateCategoryStats(transRes);
@@ -57,56 +61,53 @@ export default function Categories() {
     }
   };
 
+  // ✅ ОБНОВЛЕННАЯ функция для расчета статистики по категориям
+  const calculateCategoryStats = (transactionsList) => {
+    const statsMap = {};
 
-    // ✅ ОБНОВЛЕННАЯ функция для расчета статистики по категориям
-    const calculateCategoryStats = (transactions) => {
-        const statsMap = {};
+    transactionsList.forEach(transaction => {
+      // Универсально достаём ID категории
+      let categoryId = null;
 
-        transactions.forEach(transaction => {
-        // Универсально достаём ID категории
-        let categoryId = null;
+      if (transaction.categoryId) {
+        categoryId = transaction.categoryId;
+      } else if (transaction.category) {
+        categoryId = typeof transaction.category === "object"
+          ? transaction.category._id
+          : transaction.category;
+      }
 
-        if (transaction.categoryId) {
-            categoryId = transaction.categoryId;
-        } else if (transaction.category) {
-            categoryId = typeof transaction.category === "object"
-            ? transaction.category._id
-            : transaction.category;
-        }
+      if (!categoryId) return;
 
-        if (!categoryId) return;
+      // ✅ ИСКЛЮЧАЕМ переводы между конвертами из статистики
+      const isTransfer = transaction.title?.includes('Перевод между конвертами');
+      if (isTransfer) {
+        return;
+      }
 
-        // ✅ ИСКЛЮЧАЕМ переводы между конвертами из статистики
-        // Но ВКЛЮЧАЕМ "Пополнение конверта" и "Расход конверта"
-        const isTransfer = transaction.title?.includes('Перевод между конвертами');
-        if (isTransfer) {
-            return; // Пропускаем переводы между конвертами
-        }
+      if (!statsMap[categoryId]) {
+        statsMap[categoryId] = { 
+          total: 0, 
+          count: 0,
+          income: 0,
+          expense: 0
+        };
+      }
 
-        if (!statsMap[categoryId]) {
-            statsMap[categoryId] = { 
-            total: 0, 
-            count: 0,
-            income: 0,
-            expense: 0
-            };
-        }
+      const amount = Number(transaction.amount) || 0;
 
-        const amount = Number(transaction.amount) || 0;
+      if (transaction.type === "income") {
+        statsMap[categoryId].income += amount;
+      } else if (transaction.type === "expense") {
+        statsMap[categoryId].expense += amount;
+      }
 
-        if (transaction.type === "income") {
-            statsMap[categoryId].income += amount;
-        } else if (transaction.type === "expense") {
-            statsMap[categoryId].expense += amount;
-        }
+      statsMap[categoryId].total += amount;
+      statsMap[categoryId].count++;
+    });
 
-        statsMap[categoryId].total += amount;
-        statsMap[categoryId].count++;
-        });
-
-        return statsMap;
-    };
-
+    return statsMap;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -180,8 +181,23 @@ export default function Categories() {
 
   return (
     <div className="p-4 max-w-7xl mx-auto">
-      {/* Заголовок */}
-      <div className="flex justify-between items-center mb-6">
+      {/* АНАЛИТИКА */}
+      {showAnalytics && (
+        <div className="mb-8">
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={() => setShowAnalytics(false)}
+              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
+            >
+              ✕ Закрыть аналитику
+            </button>
+          </div>
+          <Analytics transactions={transactions} categories={categories} />
+        </div>
+      )}
+
+      {/* Заголовок и кнопки */}
+      <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Категории</h1>
           <p className="text-gray-600 mt-1">
@@ -189,22 +205,30 @@ export default function Categories() {
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            setEditingCategory(null);
-            setFormData({
-              name: '',
-              type: 'expense',
-              description: '',
-              color: '#6366f1',
-              icon: '💰'
-            });
-            setShowAddModal(true);
-          }}
-          className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors shadow-md hover:shadow-lg"
-        >
-          + Создать категорию
-        </button>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setShowAnalytics(!showAnalytics)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors shadow-md hover:shadow-lg"
+          >
+            📊 {showAnalytics ? 'Скрыть' : 'Показать'} аналитику
+          </button>
+          <button
+            onClick={() => {
+              setEditingCategory(null);
+              setFormData({
+                name: '',
+                type: 'expense',
+                description: '',
+                color: '#6366f1',
+                icon: '💰'
+              });
+              setShowAddModal(true);
+            }}
+            className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors shadow-md hover:shadow-lg"
+          >
+            + Создать категорию
+          </button>
+        </div>
       </div>
 
       {/* Статистика */}
@@ -271,27 +295,22 @@ export default function Categories() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-{filteredCategories.map(category => {
-  console.log("Рендер категории:", {
-    category,
-    stats: category._id
-  });
-
-  return (
-    <CategoryCard
-      key={category._id}
-      category={category}
-      stats={stats[category._id] || { 
-        total: 0, 
-        count: 0,
-        income: 0,
-        expense: 0
-      }}
-      onEdit={handleEdit}
-      onDelete={handleDelete}
-    />
-  );
-})}
+          {filteredCategories.map(category => {
+            return (
+              <CategoryCard
+                key={category._id}
+                category={category}
+                stats={stats[category._id] || { 
+                  total: 0, 
+                  count: 0,
+                  income: 0,
+                  expense: 0
+                }}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+              />
+            );
+          })}
         </div>
       )}
 

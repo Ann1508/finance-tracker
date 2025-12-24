@@ -36,35 +36,40 @@ export default function Dashboard() {
     fetchData();
   }, [filter.period]);
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const { startDate, endDate } = getPeriodDates(filter.period);
-      
-      const [transRes, catsRes] = await Promise.all([
-        transactionsApi.list({ startDate, endDate, limit: 100 }),
-        categoriesApi.list()
-      ]);
+const fetchData = async () => {
+  setLoading(true);
+  try {
+    const { startDate, endDate } = getPeriodDates(filter.period);
 
-      setTransactions(transRes);
-      setCategories(catsRes);
+    const params = { limit: 100 };
 
-      const calculatedStats = calculateStats(transRes);
-      console.log('Вычисленная статистика:', calculatedStats);
-      setStats(calculatedStats);
-    } catch (err) {
-      console.error('Ошибка загрузки данных:', err);
-      setStats({
-        income: 0,
-        incomeCount: 0,
-        expense: 0,
-        expenseCount: 0,
-        balance: 0
-      });
-    } finally {
-      setLoading(false);
+    if (startDate && endDate) {
+      params.startDate = startDate;
+      params.endDate = endDate;
     }
-  };
+
+    const [transRes, catsRes] = await Promise.all([
+      transactionsApi.list(params),
+      categoriesApi.list()
+    ]);
+
+    setTransactions(transRes);
+    setCategories(catsRes);
+    setStats(calculateStats(transRes));
+  } catch (err) {
+    console.error('Ошибка загрузки данных:', err);
+    setStats({
+      income: 0,
+      incomeCount: 0,
+      expense: 0,
+      expenseCount: 0,
+      balance: 0
+    });
+  } finally {
+    setLoading(false);
+  }
+};
+
 
     useEffect(() => {
     if (transactions.length > 0) {
@@ -139,6 +144,9 @@ const getCleanDescription = (transaction) => {
 
 
   const getPeriodDates = (period) => {
+    if (period === 'all') {
+      return { startDate: null, endDate: null };
+    }
     const now = new Date();
     const endDate = new Date();
     let startDate = new Date();
@@ -427,6 +435,16 @@ const getCleanDescription = (transaction) => {
 
     {/* Фильтры и кнопка добавления */}
     <div className="flex flex-wrap gap-4 items-center mb-6">
+        <button
+          onClick={() => setFilter({ ...filter, period: 'all' })}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            filter.period === 'all'
+              ? 'bg-purple-600 text-white'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
+        >
+          Всё время
+        </button>
         <div className="flex gap-2">
         <button
             onClick={() => setFilter({ ...filter, period: 'week' })}

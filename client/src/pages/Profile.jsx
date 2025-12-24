@@ -1,14 +1,28 @@
-// client/src/pages/Profile.jsx
-import React, { useState } from 'react';
+// client/src/pages/Profile.jsx - С ПОДДЕРЖКОЙ URL ПАРАМЕТРА
+
+import React, { useState, useEffect } from 'react';
 import { auth } from '../Api';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import MandatoryPayments from '../components/MandatoryPayments';
 
 export default function Profile() {
   const { user, updateUser, logout } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('profile'); // profile, password, settings
+  const [searchParams] = useSearchParams();
+  
+  // Проверяем URL параметр для автоматического открытия вкладки
+  const initialTab = searchParams.get('tab') || 'profile';
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [loading, setLoading] = useState(false);
+
+  // Следим за изменением URL параметра
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && ['profile', 'password', 'settings', 'mandatoryPayments'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   // Форма профиля
   const [profileData, setProfileData] = useState({
@@ -183,10 +197,10 @@ export default function Profile() {
 
       {/* Табы */}
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-        <div className="flex border-b">
+        <div className="flex border-b overflow-x-auto">
           <button
             onClick={() => setActiveTab('profile')}
-            className={`flex-1 px-6 py-4 font-medium transition-colors ${
+            className={`flex-1 px-6 py-4 font-medium transition-colors whitespace-nowrap ${
               activeTab === 'profile'
                 ? 'bg-purple-50 text-purple-700 border-b-2 border-purple-600'
                 : 'text-gray-600 hover:bg-gray-50'
@@ -196,7 +210,7 @@ export default function Profile() {
           </button>
           <button
             onClick={() => setActiveTab('password')}
-            className={`flex-1 px-6 py-4 font-medium transition-colors ${
+            className={`flex-1 px-6 py-4 font-medium transition-colors whitespace-nowrap ${
               activeTab === 'password'
                 ? 'bg-purple-50 text-purple-700 border-b-2 border-purple-600'
                 : 'text-gray-600 hover:bg-gray-50'
@@ -206,13 +220,23 @@ export default function Profile() {
           </button>
           <button
             onClick={() => setActiveTab('settings')}
-            className={`flex-1 px-6 py-4 font-medium transition-colors ${
+            className={`flex-1 px-6 py-4 font-medium transition-colors whitespace-nowrap ${
               activeTab === 'settings'
                 ? 'bg-purple-50 text-purple-700 border-b-2 border-purple-600'
                 : 'text-gray-600 hover:bg-gray-50'
             }`}
           >
             ⚙️ Настройки
+          </button>
+          <button
+            onClick={() => setActiveTab('mandatoryPayments')}
+            className={`flex-1 px-6 py-4 font-medium transition-colors whitespace-nowrap ${
+              activeTab === 'mandatoryPayments'
+                ? 'bg-purple-50 text-purple-700 border-b-2 border-purple-600'
+                : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            💳 Обязательные платежи
           </button>
         </div>
 
@@ -376,6 +400,11 @@ export default function Profile() {
                 {loading ? 'Сохранение...' : 'Сохранить настройки'}
               </button>
             </form>
+          )}
+
+          {/* Вкладка обязательных платежей */}
+          {activeTab === 'mandatoryPayments' && (
+            <MandatoryPayments />
           )}
         </div>
       </div>

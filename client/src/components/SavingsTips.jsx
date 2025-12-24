@@ -30,8 +30,11 @@ export default function SavingsTips({ transactions, budgets, categories }) {
       return null;
     }
 
-    const expenses = transactions.filter(t => t.type === 'expense');
-    const income = transactions.filter(t => t.type === 'income');
+    // ✅ Фильтруем транзакции: исключаем "Перевод между конвертами"
+    const filteredTransactions = transactions.filter(t => !t.title?.includes('Перевод между конвертами'));
+
+    const expenses = filteredTransactions.filter(t => t.type === 'expense');
+    const income = filteredTransactions.filter(t => t.type === 'income');
     const totalExpense = expenses.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
     const totalIncome = income.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
 
@@ -272,7 +275,10 @@ export default function SavingsTips({ transactions, budgets, categories }) {
     const expenseFrequency = {};
     expenses.forEach(t => {
       const key = t.title.toLowerCase();
-      expenseFrequency[key] = (expenseFrequency[key] || 0) + 1;
+      // ✅ Исключаем операции конвертов
+      if (!t.title?.includes('Перевод между конвертами')) {
+        expenseFrequency[key] = (expenseFrequency[key] || 0) + 1;
+      }
     });
     
     const recurring = Object.entries(expenseFrequency)

@@ -1,4 +1,5 @@
 // client/src/Api.js
+import axios from 'axios';
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
 
 async function apiFetch(path, opts = {}) {
@@ -240,4 +241,41 @@ export const budgets = {
     
     return response.json();
   }
+};
+
+export const mandatoryPayments = {
+  list: () => 
+    axios.get(`${API_BASE}/api/mandatory-payments`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+    }).then(res => res.data),
+
+  getStatus: () =>
+    axios.get(`${API_BASE}/api/mandatory-payments/status`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+    }).then(res => res.data),
+
+  get: (id) =>
+    axios.get(`${API_BASE}/api/mandatory-payments/${id}`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+    }).then(res => res.data),
+
+  create: (data) =>
+    axios.post(`${API_BASE}/api/mandatory-payments`, data, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+    }).then(res => res.data),
+
+  update: (id, data) =>
+    axios.put(`${API_BASE}/api/mandatory-payments/${id}`, data, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+    }).then(res => res.data),
+
+  markPaid: (id) =>
+    axios.patch(`${API_BASE}/api/mandatory-payments/${id}/mark-paid`, {}, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+    }).then(res => res.data),
+
+  delete: (id) =>
+    axios.delete(`${API_BASE}/api/mandatory-payments/${id}`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+    }).then(res => res.data)
 };
